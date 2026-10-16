@@ -5,9 +5,8 @@ import * as schema from './schema';
 
 dotenv.config();
 
-if (!process.env.POSTGRES_URL) {
-  throw new Error('POSTGRES_URL environment variable is not set');
-}
-
-export const client = postgres(process.env.POSTGRES_URL);
+// Queries and actions guard an unconfigured workspace before using this lazy client.
+export const client = postgres(
+  process.env.POSTGRES_URL || 'postgres://localhost/unconfigured',
+);
 export const db = drizzle(client, { schema });

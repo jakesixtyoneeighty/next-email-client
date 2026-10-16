@@ -1,91 +1,54 @@
 'use client';
-
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from '@/components/ui/tooltip';
 import { moveThreadToDone, moveThreadToTrash } from '@/lib/db/actions';
-import { Archive, Check, Clock } from 'lucide-react';
-import { useActionState } from 'react';
+import { Archive, Trash2 } from 'lucide-react';
+import { useActionState, useEffect } from 'react';
+import { toast } from 'sonner';
 
-interface ThreadActionsProps {
-  threadId: number;
-}
-
-export function ThreadActions({ threadId }: ThreadActionsProps) {
-  const initialState = {
-    error: null,
-    success: false,
-  };
-
-  const [doneState, doneAction, donePending] = useActionState(
+export function ThreadActions({ threadId }: { threadId: number }) {
+  const [archiveState, archiveAction, archivePending] = useActionState(
     moveThreadToDone,
-    initialState,
+    { error: null, success: false },
   );
   const [trashState, trashAction, trashPending] = useActionState(
     moveThreadToTrash,
-    initialState,
+    { error: null, success: false },
   );
-
-  const isProduction = process.env.NEXT_PUBLIC_VERCEL_ENV === 'production';
-
+  useEffect(() => {
+    if (archiveState.error) toast.error(archiveState.error);
+    else if (archiveState.success) toast.success('Conversation archived');
+  }, [archiveState]);
+  useEffect(() => {
+    if (trashState.error) toast.error(trashState.error);
+    else if (trashState.success) toast.success('Conversation moved to trash');
+  }, [trashState]);
+  const disabled =
+    archivePending ||
+    trashPending ||
+    process.env.NEXT_PUBLIC_VERCEL_ENV === 'production';
   return (
-    <TooltipProvider>
-      <div className="flex items-center space-x-1">
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <form action={doneAction}>
-              <input type="hidden" name="threadId" value={threadId} />
-              <button
-                type="submit"
-                disabled={donePending || isProduction}
-                className="flex h-6 w-6 cursor-pointer items-center justify-center rounded-full transition-colors hover:bg-gray-200 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                <Check size={14} className="text-gray-600" />
-              </button>
-            </form>
-          </TooltipTrigger>
-          {isProduction && (
-            <TooltipContent>
-              <p>Marking as done is disabled in production</p>
-            </TooltipContent>
-          )}
-        </Tooltip>
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <button
-              disabled
-              className="flex h-6 w-6 cursor-pointer items-center justify-center rounded-full transition-colors hover:bg-gray-200 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              <Clock size={14} className="text-gray-400" />
-            </button>
-          </TooltipTrigger>
-          <TooltipContent>
-            <p>This feature is not yet implemented</p>
-          </TooltipContent>
-        </Tooltip>
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <form action={trashAction}>
-              <input type="hidden" name="threadId" value={threadId} />
-              <button
-                type="submit"
-                disabled={trashPending || isProduction}
-                className="flex h-6 w-6 cursor-pointer items-center justify-center rounded-full transition-colors hover:bg-gray-200 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                <Archive size={14} className="text-gray-600" />
-              </button>
-            </form>
-          </TooltipTrigger>
-          {isProduction && (
-            <TooltipContent>
-              <p>Moving to trash is disabled in production</p>
-            </TooltipContent>
-          )}
-        </Tooltip>
-      </div>
-    </TooltipProvider>
+    <div className="thread-actions">
+      <form action={archiveAction}>
+        <input type="hidden" name="threadId" value={threadId} />
+        <button
+          className="icon-button"
+          disabled={disabled}
+          aria-label="Archive conversation"
+          title="Archive conversation"
+        >
+          <Archive size={16} />
+        </button>
+      </form>
+      <form action={trashAction}>
+        <input type="hidden" name="threadId" value={threadId} />
+        <button
+          className="icon-button"
+          disabled={disabled}
+          aria-label="Move conversation to trash"
+          title="Move to trash"
+        >
+          <Trash2 size={16} />
+        </button>
+      </form>
+    </div>
   );
 }

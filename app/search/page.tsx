@@ -1,89 +1,88 @@
+import { MailTopbar, ThreadRow } from '@/app/components/thread-list';
 import { searchThreads } from '@/lib/db/queries';
-import { formatEmailString, highlightText } from '@/lib/utils';
-import { X } from 'lucide-react';
-import Link from 'next/link';
+import { Search } from 'lucide-react';
+import Form from 'next/form';
 import { Suspense } from 'react';
-import { NavMenu } from '../components/menu';
-import { Search } from '../components/search';
 
-async function Threads({
+export default function SearchPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; id?: string }>;
+  searchParams: Promise<{ q?: string }>;
 }) {
-  let q = (await searchParams).q;
-  let threads = await searchThreads(q);
-
   return (
-    <div className="h-[calc(100vh-64px)] overflow-auto">
-      {threads.map((thread) => {
-        const latestEmail = thread.latestEmail;
-        return (
-          <Link
-            key={thread.id}
-            href={`/f/${thread.folderName.toLowerCase()}/${thread.id}`}
-          >
-            <div
-              className={`flex cursor-pointer items-center border-b border-gray-100 p-4 hover:bg-gray-50`}
-            >
-              <div className="flex grow items-center overflow-hidden">
-                <div className="mr-4 w-[200px] shrink-0">
-                  <span className="truncate font-medium">
-                    {highlightText(formatEmailString(latestEmail.sender), q)}
-                  </span>
-                </div>
-                <div className="flex grow items-center overflow-hidden">
-                  <span className="mr-2 max-w-[400px] min-w-[175px] truncate font-medium">
-                    {highlightText(thread.subject, q)}
-                  </span>
-                  <span className="truncate text-gray-600">
-                    {highlightText(latestEmail.body, q)}
-                  </span>
-                </div>
-              </div>
-              <div className="ml-4 flex w-40 shrink-0 items-center justify-end">
-                <span className="text-sm text-gray-500">
-                  {new Date(thread.lastActivityDate).toLocaleDateString()}
-                </span>
-              </div>
-            </div>
-          </Link>
-        );
-      })}
+    <div className="mail-page">
+      <MailTopbar />
+      <Suspense
+        fallback={<div className="loading-state">Searching conversations…</div>}
+      >
+        <Results searchParams={searchParams} />
+      </Suspense>
     </div>
   );
 }
-
-export default async function SearchPage({
+async function Results({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; id?: string }>;
+  searchParams: Promise<{ q?: string }>;
 }) {
+  const { q } = await searchParams;
+  const threads = await searchThreads(q);
   return (
-    <div className="flex h-screen">
-      <div className="grow overflow-hidden border-r border-gray-200">
-        <div className="flex h-[70px] items-center justify-between border-b border-gray-200 p-4">
-          <div className="flex w-full items-center">
-            <NavMenu />
-            <Suspense>
-              <Search />
-            </Suspense>
-          </div>
-          <div className="ml-4 flex items-center">
-            <Link href="/" passHref>
-              <button
-                className="flex h-8 w-8 cursor-pointer items-center justify-center rounded-full transition-colors hover:bg-gray-100"
-                aria-label="Close search"
-              >
-                <X size={18} />
-              </button>
-            </Link>
-          </div>
+    <>
+      <header className="mail-heading">
+        <div>
+          <h1>
+            Search<span className="count-badge">{threads.length}</span>
+          </h1>
+          <p>
+            {q
+              ? `Results for “${q}”`
+              : 'Find the conversation you’re looking for.'}
+          </p>
         </div>
-        <Suspense>
-          <Threads searchParams={searchParams} />
-        </Suspense>
+      </header>
+      <Form action="/search" className="search-form">
+        <Search size={17} />
+        <input
+          name="q"
+          aria-label="Search conversations"
+          placeholder="Search people, subjects, or messages"
+          defaultValue={q}
+          key={q}
+          autoFocus
+        />
+      </Form>
+      <div className="list-labels">
+        <span>Conversation</span>
+        <span>Last activity</span>
       </div>
-    </div>
+      <div className="thread-scroll">
+        {threads.map((thread) => (
+          <ThreadRow
+            key={thread.id}
+            folderName={
+              thread.folderName?.toLowerCase() === 'flagged'
+                ? 'starred'
+                : thread.folderName?.toLowerCase() || 'inbox'
+            }
+            query={q}
+            thread={{ ...thread, emails: [thread.latestEmail] }}
+          />
+        ))}
+        {!threads.length && (
+          <div className="empty-state">
+            <span className="empty-icon">
+              <Search size={28} />
+            </span>
+            <h2>{q ? 'No conversations found.' : 'Find your next thread.'}</h2>
+            <p>
+              {q
+                ? 'Try a different name, subject, or phrase.'
+                : 'Search across your people, subjects, and messages.'}
+            </p>
+          </div>
+        )}
+      </div>
+    </>
   );
 }

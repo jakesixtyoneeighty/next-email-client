@@ -29,13 +29,12 @@ export function toTitleCase(str: string) {
 
 export function highlightText(text: string, query: string | undefined) {
   if (!query) return text;
-  const parts = text.split(new RegExp(`(${query})`, 'gi'));
+  const escapedQuery = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const parts = text.split(new RegExp(`(${escapedQuery})`, 'gi'));
 
   return parts.map((part, i) =>
     part.toLowerCase() === query.toLowerCase() ? (
-      <mark key={i} className="bg-yellow-200 text-black">
-        {part}
-      </mark>
+      <mark key={i}>{part}</mark>
     ) : (
       part
     ),

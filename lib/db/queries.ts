@@ -1,4 +1,5 @@
 import { and, desc, eq, ilike, or, sql } from 'drizzle-orm';
+import { cacheTag } from 'next/cache';
 import { toTitleCase } from '../utils';
 import { db } from './drizzle';
 import { emails, folders, threadFolders, threads, users } from './schema';
@@ -10,6 +11,9 @@ type Folder = {
 
 export async function getFoldersWithThreadCount() {
   'use cache';
+  cacheTag('mail');
+  if (!process.env.POSTGRES_URL)
+    return { specialFolders: [], otherFolders: [] };
 
   let foldersWithCount = await db
     .select({
@@ -35,8 +39,11 @@ export async function getFoldersWithThreadCount() {
 
 export async function getThreadsForFolder(folderName: string) {
   'use cache';
+  cacheTag('mail');
+  if (!process.env.POSTGRES_URL) return [];
 
-  let originalFolderName = toTitleCase(decodeURIComponent(folderName));
+  let originalFolderName =
+    folderName === 'starred' ? 'Flagged' : toTitleCase(folderName);
 
   const threadsWithEmails = await db
     .select({
@@ -86,6 +93,7 @@ export async function getThreadsForFolder(folderName: string) {
 }
 
 export async function searchThreads(search: string | undefined) {
+  if (!process.env.POSTGRES_URL) return [];
   if (!search) {
     return [];
   }
@@ -148,8 +156,11 @@ export async function searchThreads(search: string | undefined) {
 
 export async function getThreadInFolder(folderName: string, threadId: string) {
   'use cache';
+  cacheTag('mail');
+  if (!process.env.POSTGRES_URL) return undefined;
 
-  let originalFolderName = toTitleCase(decodeURIComponent(folderName));
+  let originalFolderName =
+    folderName === 'starred' ? 'Flagged' : toTitleCase(folderName);
   let result = await db
     .select({
       id: threads.id,
@@ -176,6 +187,8 @@ export async function getThreadInFolder(folderName: string, threadId: string) {
 
 export async function getEmailsForThread(threadId: string) {
   'use cache';
+  cacheTag('mail');
+  if (!process.env.POSTGRES_URL) return null;
 
   const result = await db
     .select({
@@ -220,6 +233,8 @@ export async function getEmailsForThread(threadId: string) {
 
 export async function getAllEmailAddresses() {
   'use cache';
+  cacheTag('mail');
+  if (!process.env.POSTGRES_URL) return [];
 
   return db
     .select({
@@ -232,6 +247,8 @@ export async function getAllEmailAddresses() {
 
 export async function getUserProfile(userId: number) {
   'use cache';
+  cacheTag('mail');
+  if (!process.env.POSTGRES_URL) return null;
 
   const userInfo = await db
     .select({

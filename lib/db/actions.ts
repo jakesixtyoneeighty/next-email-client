@@ -1,7 +1,7 @@
 'use server';
 
 import { eq } from 'drizzle-orm';
-import { revalidatePath } from 'next/cache';
+import { revalidatePath, updateTag } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { z } from 'zod';
 import { db } from './drizzle';
@@ -21,9 +21,10 @@ export async function sendEmailAction(_: any, formData: FormData) {
     recipientEmail: formData.get('recipientEmail'),
   };
 
-  if (process.env.VERCEL_ENV === 'production') {
+  if (!process.env.POSTGRES_URL || process.env.VERCEL_ENV === 'production') {
     return {
-      error: 'Only works on localhost for now',
+      error:
+        'This workspace is read-only. Message changes require a configured local database.',
       previous: rawFormData,
     };
   }
@@ -86,20 +87,22 @@ export async function sendEmailAction(_: any, formData: FormData) {
     };
   }
 
+  updateTag('mail');
   revalidatePath('/', 'layout');
   redirect(`/f/sent/${newThread.id}`);
 }
 
 export async function moveThreadToDone(_: any, formData: FormData) {
-  if (process.env.VERCEL_ENV === 'production') {
+  if (!process.env.POSTGRES_URL || process.env.VERCEL_ENV === 'production') {
     return {
-      error: 'Only works on localhost for now',
+      error:
+        'This workspace is read-only. Message changes require a configured local database.',
     };
   }
 
   let threadId = formData.get('threadId');
 
-  if (!threadId || typeof threadId !== 'string') {
+  if (typeof threadId !== 'string' || !/^[1-9]\d*$/.test(threadId)) {
     return { error: 'Invalid thread ID', success: false };
   }
 
@@ -123,8 +126,8 @@ export async function moveThreadToDone(_: any, formData: FormData) {
       folderId: doneFolder.id,
     });
 
-    revalidatePath('/f/[name]');
-    revalidatePath('/f/[name]/[id]');
+    updateTag('mail');
+    revalidatePath('/', 'layout');
     return { success: true, error: null };
   } catch (error) {
     console.error('Failed to move thread to Done:', error);
@@ -133,15 +136,16 @@ export async function moveThreadToDone(_: any, formData: FormData) {
 }
 
 export async function moveThreadToTrash(_: any, formData: FormData) {
-  if (process.env.VERCEL_ENV === 'production') {
+  if (!process.env.POSTGRES_URL || process.env.VERCEL_ENV === 'production') {
     return {
-      error: 'Only works on localhost for now',
+      error:
+        'This workspace is read-only. Message changes require a configured local database.',
     };
   }
 
   let threadId = formData.get('threadId');
 
-  if (!threadId || typeof threadId !== 'string') {
+  if (typeof threadId !== 'string' || !/^[1-9]\d*$/.test(threadId)) {
     return { error: 'Invalid thread ID', success: false };
   }
 
@@ -165,8 +169,8 @@ export async function moveThreadToTrash(_: any, formData: FormData) {
       folderId: trashFolder.id,
     });
 
-    revalidatePath('/f/[name]');
-    revalidatePath('/f/[name]/[id]');
+    updateTag('mail');
+    revalidatePath('/', 'layout');
     return { success: true, error: null };
   } catch (error) {
     console.error('Failed to move thread to Trash:', error);

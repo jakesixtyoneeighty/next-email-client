@@ -1,16 +1,21 @@
-import type { Metadata } from 'next';
-import { Inter } from 'next/font/google';
+import { GeistSans } from 'geist/font/sans';
+import type { Metadata, Viewport } from 'next';
 import { Suspense } from 'react';
 import { Toaster } from 'sonner';
+import { Navigation } from './components/navigation';
 import { RightSidebar } from './components/right-sidebar';
-import { WelcomeToast } from './components/welcome-toast';
 import './globals.css';
 
-const inter = Inter({ subsets: ['latin'] });
-
 export const metadata: Metadata = {
-  title: 'Next.js Mail',
-  description: 'An email client template using the Next.js App Router.',
+  title: { default: 'Mail — sixtyoneeighty', template: '%s — sixtyoneeighty' },
+  description:
+    'Your conversations, in one place. The sixtyoneeighty mail workspace.',
+  applicationName: 'sixtyoneeighty Mail',
+  icons: { icon: '/favicon.ico', apple: '/apple-icon.png' },
+};
+export const viewport: Viewport = {
+  themeColor: '#0b0b0d',
+  colorScheme: 'dark',
 };
 
 export default function RootLayout({
@@ -19,21 +24,26 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" className={`bg-white text-gray-800 ${inter.className}`}>
-      <body className="flex h-screen">
-        <main className="grow overflow-hidden">{children}</main>
-        <Suspense fallback={<RightSidebarSkeleton />}>
+    <html lang="en" className={`dark ${GeistSans.className}`}>
+      <body>
+        <a className="skip-link" href="#main-content">
+          Skip to mail
+        </a>
+        <Suspense>
+          <Navigation />
+        </Suspense>
+        <main id="main-content" className="mail-main">
+          {children}
+        </main>
+        <Suspense
+          fallback={
+            <aside className="profile-sidebar" aria-label="Loading profile" />
+          }
+        >
           <RightSidebar userId={1} />
         </Suspense>
-        <Toaster closeButton />
-        <WelcomeToast />
+        <Toaster theme="dark" closeButton />
       </body>
     </html>
-  );
-}
-
-function RightSidebarSkeleton() {
-  return (
-    <div className="hidden w-[350px] shrink-0 overflow-auto bg-neutral-50 p-6 sm:flex" />
   );
 }

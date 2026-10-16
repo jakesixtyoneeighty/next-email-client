@@ -1,6 +1,7 @@
-import { LeftSidebar } from '@/app/components/left-sidebar';
 import { ThreadActions } from '@/app/components/thread-actions';
-import { getEmailsForThread } from '@/lib/db/queries';
+import { getEmailsForThread, getThreadInFolder } from '@/lib/db/queries';
+import { ArrowLeft } from 'lucide-react';
+import Link from 'next/link';
 import { notFound } from 'next/navigation';
 
 export default async function EmailPage({
@@ -8,48 +9,53 @@ export default async function EmailPage({
 }: {
   params: Promise<{ name: string; id: string }>;
 }) {
-  let id = (await params).id;
-  let thread = await getEmailsForThread(id);
-
-  if (!thread || thread.emails.length === 0) {
-    notFound();
-  }
-
+  const { name, id } = await params;
+  if (!/^[1-9]\d*$/.test(id)) notFound();
+  const [thread, membership] = await Promise.all([
+    getEmailsForThread(id),
+    getThreadInFolder(name, id),
+  ]);
+  if (!thread || !thread.emails.length) notFound();
   return (
-    <div className="flex h-full grow">
-      <LeftSidebar />
-      <div className="grow overflow-auto p-2 sm:p-6">
-        <div className="mx-auto max-w-4xl">
-          <div className="mx-6 mb-6 flex flex-col items-start justify-between sm:flex-row">
-            <h1 className="mt-4 max-w-2xl grow pr-4 text-2xl font-semibold sm:mt-0">
-              {thread.subject}
-            </h1>
-            <div className="mt-2 flex shrink-0 items-center space-x-1 sm:mt-0">
-              <button className="mr-2 cursor-pointer text-sm font-medium text-gray-700">
-                Share
-              </button>
-              <ThreadActions threadId={thread.id} />
-            </div>
-          </div>
-          <div className="space-y-6">
-            {thread.emails.map((email) => (
-              <div key={email.id} className="rounded-lg bg-gray-50 px-6 py-4">
-                <div className="mb-2 flex flex-col items-start justify-between sm:flex-row sm:items-center">
-                  <div className="font-semibold">
-                    {email.sender.firstName} {email.sender.lastName} to{' '}
-                    {email.recipientId === thread.emails[0].sender.id
-                      ? 'Me'
-                      : 'All'}
-                  </div>
-                  <div className="text-sm text-gray-500">
-                    {new Date(email.sentDate!).toLocaleString()}
-                  </div>
-                </div>
-                <div className="whitespace-pre-wrap">{email.body}</div>
+    <div className="reader-scroll">
+      <div className="reader-toolbar">
+        <Link className="back-link" href={`/f/${name}`}>
+          <ArrowLeft size={16} /> Back to {name}
+        </Link>
+        <ThreadActions threadId={thread.id} />
+      </div>
+      <div className="reader-content">
+        <h1 className="reader-title">{thread.subject || '(No subject)'}</h1>
+        <p className="thread-meta">
+          {thread.emails.length} message{thread.emails.length === 1 ? '' : 's'}{' '}
+          {!membership && '· This conversation has been moved'}
+        </p>
+        {thread.emails.map((email) => (
+          <article key={email.id} className="message">
+            <header className="message-header">
+              <span className="avatar">
+                {email.sender.firstName?.[0]}
+                {email.sender.lastName?.[0]}
+              </span>
+              <div>
+                <h2>
+                  {email.sender.firstName || 'Contact'} {email.sender.lastName}
+                </h2>
+                <p>To {email.recipientId === 1 ? 'me' : 'recipient'}</p>
               </div>
-            ))}
-          </div>
-        </div>
+              <time>
+                {email.sentDate
+                  ? new Date(email.sentDate).toLocaleString('en-US', {
+                      dateStyle: 'medium',
+                      timeStyle: 'short',
+                      timeZone: 'UTC',
+                    }) + ' UTC'
+                  : ''}
+              </time>
+            </header>
+            <div className="message-body">{email.body}</div>
+          </article>
+        ))}
       </div>
     </div>
   );
