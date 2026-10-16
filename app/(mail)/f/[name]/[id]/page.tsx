@@ -1,6 +1,6 @@
 import { ThreadActions } from '@/app/components/thread-actions';
 import { getEmailsForThread, getThreadInFolder } from '@/lib/db/queries';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, Paperclip, Reply } from 'lucide-react';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 
@@ -41,7 +41,9 @@ export default async function EmailPage({
                 <h2>
                   {email.sender.firstName || 'Contact'} {email.sender.lastName}
                 </h2>
-                <p>To {email.recipientId === 1 ? 'me' : 'recipient'}</p>
+                <p>
+                  {email.sender.email} → {email.recipientAddress || 'me'}
+                </p>
               </div>
               <time>
                 {email.sentDate
@@ -54,6 +56,22 @@ export default async function EmailPage({
               </time>
             </header>
             <div className="message-body">{email.body}</div>
+            {email.attachments.map((a) => (
+              <a
+                className="attachment-link"
+                key={a.id}
+                href={`/api/attachments/${email.id}/${a.id}`}
+              >
+                <Paperclip size={14} /> {a.filename} ({Math.ceil(a.size / 1024)}{' '}
+                KB)
+              </a>
+            ))}
+            <Link
+              className="back-link"
+              href={`/f/inbox/new?${new URLSearchParams({ to: email.replyTo || email.sender.email, subject: /^re:/i.test(thread.subject || '') ? thread.subject! : `Re: ${thread.subject || ''}` })}`}
+            >
+              <Reply size={15} /> Reply
+            </Link>
           </article>
         ))}
       </div>

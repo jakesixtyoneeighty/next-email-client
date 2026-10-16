@@ -1,179 +1,88 @@
 'use server';
-
-import { eq } from 'drizzle-orm';
-import { revalidatePath, updateTag } from 'next/cache';
+import { and, eq } from 'drizzle-orm';
+import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { z } from 'zod';
+import { sendMessage } from '../mail/send';
+import { requireMailbox } from '../session';
 import { db } from './drizzle';
-import { emails, folders, threadFolders, threads, users } from './schema';
+import { folders, threadFolders, threads } from './schema';
 
 const sendEmailSchema = z.object({
-  subject: z.string().min(1, 'Subject is required'),
-  body: z.string().min(1, 'Body is required'),
-  recipientEmail: z.string().email('Invalid email address'),
+  id: z.string().uuid(),
+  subject: z.string().trim().min(1, 'Subject is required').max(255),
+  body: z.string().min(1, 'Body is required').max(100_000),
+  recipientEmail: z
+    .string()
+    .trim()
+    .toLowerCase()
+    .email('Invalid email address')
+    .max(255),
 });
-
-export async function sendEmailAction(_: any, formData: FormData) {
-  let newThread;
-  let rawFormData = {
-    subject: formData.get('subject'),
-    body: formData.get('body'),
-    recipientEmail: formData.get('recipientEmail'),
+export async function sendEmailAction(_: unknown, formData: FormData) {
+  const mailbox = await requireMailbox();
+  const previous = {
+    id: String(formData.get('id') || ''),
+    subject: String(formData.get('subject') || ''),
+    body: String(formData.get('body') || ''),
+    recipientEmail: String(formData.get('recipientEmail') || ''),
   };
-
-  if (!process.env.POSTGRES_URL || process.env.VERCEL_ENV === 'production') {
+  const parsed = sendEmailSchema.safeParse(previous);
+  if (!parsed.success)
+    return { error: parsed.error.issues[0].message, previous };
+  let threadId;
+  try {
+    threadId = await sendMessage(mailbox, parsed.data);
+  } catch (error) {
     return {
       error:
-        'This workspace is read-only. Message changes require a configured local database.',
-      previous: rawFormData,
+        error instanceof Error && !('query' in error)
+          ? error.message
+          : 'Delivery could not be confirmed. Retry this unchanged message.',
+      previous,
     };
   }
-
-  try {
-    let validatedFields = sendEmailSchema.parse({
-      subject: formData.get('subject'),
-      body: formData.get('body'),
-      recipientEmail: formData.get('recipientEmail'),
-    });
-
-    let { subject, body, recipientEmail } = validatedFields;
-
-    let [recipient] = await db
-      .select()
-      .from(users)
-      .where(eq(users.email, recipientEmail));
-
-    if (!recipient) {
-      [recipient] = await db
-        .insert(users)
-        .values({ email: recipientEmail })
-        .returning();
-    }
-
-    let result = await db
-      .insert(threads)
-      .values({
-        subject,
-        lastActivityDate: new Date(),
-      })
-      .returning();
-    newThread = result[0];
-
-    await db.insert(emails).values({
-      threadId: newThread.id,
-      senderId: 1, // Assuming the current user's ID is 1. Replace this with the actual user ID.
-      recipientId: recipient.id,
-      subject,
-      body,
-      sentDate: new Date(),
-    });
-
-    let [sentFolder] = await db
-      .select()
-      .from(folders)
-      .where(eq(folders.name, 'Sent'));
-
-    await db.insert(threadFolders).values({
-      threadId: newThread.id,
-      folderId: sentFolder.id,
-    });
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      return { error: error.errors[0].message, previous: rawFormData };
-    }
-    return {
-      error: 'Failed to send email. Please try again.',
-      previous: rawFormData,
-    };
-  }
-
-  updateTag('mail');
   revalidatePath('/', 'layout');
-  redirect(`/f/sent/${newThread.id}`);
+  redirect(`/f/sent/${threadId}`);
 }
-
-export async function moveThreadToDone(_: any, formData: FormData) {
-  if (!process.env.POSTGRES_URL || process.env.VERCEL_ENV === 'production') {
-    return {
-      error:
-        'This workspace is read-only. Message changes require a configured local database.',
-    };
-  }
-
-  let threadId = formData.get('threadId');
-
-  if (typeof threadId !== 'string' || !/^[1-9]\d*$/.test(threadId)) {
-    return { error: 'Invalid thread ID', success: false };
-  }
-
+async function moveThread(formData: FormData, destination: string) {
+  const mailbox = await requireMailbox();
+  const id = z.coerce
+    .number()
+    .int()
+    .positive()
+    .safeParse(formData.get('threadId'));
+  if (!id.success) return { error: 'Invalid conversation', success: false };
   try {
-    let doneFolder = await db.query.folders.findFirst({
-      where: eq(folders.name, 'Archive'),
+    await db.transaction(async (tx) => {
+      const [thread] = await tx
+        .select()
+        .from(threads)
+        .where(and(eq(threads.id, id.data), eq(threads.mailboxId, mailbox.id)))
+        .for('update');
+      if (!thread) throw new Error('Conversation not found');
+      const [folder] = await tx
+        .select()
+        .from(folders)
+        .where(eq(folders.name, destination))
+        .limit(1);
+      if (!folder) throw new Error('Folder not found');
+      await tx
+        .delete(threadFolders)
+        .where(eq(threadFolders.threadId, thread.id));
+      await tx
+        .insert(threadFolders)
+        .values({ threadId: thread.id, folderId: folder.id });
     });
-
-    if (!doneFolder) {
-      return { error: 'Done folder not found', success: false };
-    }
-
-    let parsedThreadId = parseInt(threadId, 10);
-
-    await db
-      .delete(threadFolders)
-      .where(eq(threadFolders.threadId, parsedThreadId));
-
-    await db.insert(threadFolders).values({
-      threadId: parsedThreadId,
-      folderId: doneFolder.id,
-    });
-
-    updateTag('mail');
     revalidatePath('/', 'layout');
     return { success: true, error: null };
-  } catch (error) {
-    console.error('Failed to move thread to Done:', error);
-    return { success: false, error: 'Failed to move thread to Done' };
+  } catch {
+    return { success: false, error: 'Unable to move this conversation.' };
   }
 }
-
-export async function moveThreadToTrash(_: any, formData: FormData) {
-  if (!process.env.POSTGRES_URL || process.env.VERCEL_ENV === 'production') {
-    return {
-      error:
-        'This workspace is read-only. Message changes require a configured local database.',
-    };
-  }
-
-  let threadId = formData.get('threadId');
-
-  if (typeof threadId !== 'string' || !/^[1-9]\d*$/.test(threadId)) {
-    return { error: 'Invalid thread ID', success: false };
-  }
-
-  try {
-    let trashFolder = await db.query.folders.findFirst({
-      where: eq(folders.name, 'Trash'),
-    });
-
-    if (!trashFolder) {
-      return { error: 'Trash folder not found', success: false };
-    }
-
-    let parsedThreadId = parseInt(threadId, 10);
-
-    await db
-      .delete(threadFolders)
-      .where(eq(threadFolders.threadId, parsedThreadId));
-
-    await db.insert(threadFolders).values({
-      threadId: parsedThreadId,
-      folderId: trashFolder.id,
-    });
-
-    updateTag('mail');
-    revalidatePath('/', 'layout');
-    return { success: true, error: null };
-  } catch (error) {
-    console.error('Failed to move thread to Trash:', error);
-    return { success: false, error: 'Failed to move thread to Trash' };
-  }
+export async function moveThreadToDone(_: unknown, formData: FormData) {
+  return moveThread(formData, 'Archive');
+}
+export async function moveThreadToTrash(_: unknown, formData: FormData) {
+  return moveThread(formData, 'Trash');
 }

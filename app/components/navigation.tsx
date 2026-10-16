@@ -1,9 +1,11 @@
 'use client';
 
+import { authClient } from '@/lib/auth-client';
 import {
   Archive,
   FileText,
   Inbox,
+  LogOut,
   Menu,
   PenLine,
   Send,
@@ -25,7 +27,7 @@ const folders = [
   { name: 'Trash', path: 'trash', icon: Trash2 },
 ];
 
-export function Navigation() {
+export function Navigation({ email }: { email: string }) {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
   useEffect(() => setOpen(false), [pathname]);
@@ -94,6 +96,15 @@ export function Navigation() {
           })}
         </nav>
         <div className="nav-bottom">
+          <button
+            className="folder-link"
+            onClick={async () => {
+              await authClient.signOut();
+              window.location.assign('/login');
+            }}
+          >
+            <LogOut size={18} /> Sign out
+          </button>
           <Image
             src="/brand/sixtyoneeighty.png"
             alt="sixtyoneeighty"
@@ -106,7 +117,8 @@ export function Navigation() {
           <div className="workspace-label">
             <span className="workspace-dot" />
             <div>
-              sixtyoneeighty<span>Mail workspace</span>
+              {email}
+              <span>Mail workspace</span>
             </div>
           </div>
         </div>

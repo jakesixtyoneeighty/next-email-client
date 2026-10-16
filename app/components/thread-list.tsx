@@ -6,7 +6,10 @@ import Link from 'next/link';
 import { ThreadActions } from './thread-actions';
 
 type User = typeof users.$inferSelect;
-type Email = Omit<typeof emails.$inferSelect, 'threadId'> & {
+type Email = Pick<
+  typeof emails.$inferSelect,
+  'id' | 'senderId' | 'recipientId' | 'subject' | 'body' | 'sentDate'
+> & {
   sender: Pick<User, 'id' | 'firstName' | 'lastName' | 'email'>;
 };
 export type MailThread = {

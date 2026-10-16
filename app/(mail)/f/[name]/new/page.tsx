@@ -2,14 +2,22 @@
 import { sendEmailAction } from '@/lib/db/actions';
 import { ArrowLeft, Send, Trash2 } from 'lucide-react';
 import Link from 'next/link';
-import { useActionState } from 'react';
+import { useSearchParams } from 'next/navigation';
+import { useActionState, useEffect, useState } from 'react';
 
 export default function ComposePage() {
+  const params = useSearchParams();
+  const [requestId, setRequestId] = useState('');
+  useEffect(() => setRequestId(crypto.randomUUID()), []);
   const [state, formAction, pending] = useActionState(sendEmailAction, {
     error: '',
-    previous: { recipientEmail: '', subject: '', body: '' },
+    previous: {
+      id: '',
+      recipientEmail: params.get('to') || '',
+      subject: params.get('subject') || '',
+      body: '',
+    },
   });
-  const isProduction = process.env.NEXT_PUBLIC_VERCEL_ENV === 'production';
   return (
     <div className="compose-scroll">
       <div className="reader-toolbar">
@@ -22,9 +30,6 @@ export default function ComposePage() {
         <h1>New message</h1>
         <p className="compose-note">
           A good conversation starts with a few words.
-          <br />
-          Messages are saved to this workspace. External email delivery is not
-          connected.
         </p>
         {state.error && (
           <div className="form-error" role="alert">
@@ -32,6 +37,11 @@ export default function ComposePage() {
           </div>
         )}
         <form action={formAction} className="compose-form">
+          <input
+            type="hidden"
+            name="id"
+            value={state.previous.id || requestId}
+          />
           <div className="compose-field">
             <label htmlFor="recipient">To</label>
             <input
@@ -68,7 +78,7 @@ export default function ComposePage() {
                 (event.metaKey || event.ctrlKey) &&
                 event.key === 'Enter' &&
                 !pending &&
-                !isProduction
+                requestId
               ) {
                 event.preventDefault();
                 event.currentTarget.form?.requestSubmit();
@@ -79,10 +89,10 @@ export default function ComposePage() {
             <button
               className="primary-button"
               type="submit"
-              disabled={pending || isProduction}
+              disabled={pending || !requestId}
             >
               <Send size={15} />
-              {pending ? 'Saving…' : 'Save to sent'}
+              {pending ? 'Sending…' : 'Send message'}
             </button>
             <span className="keyboard-hint">⌘ / Ctrl + Enter</span>
             <Link
@@ -94,11 +104,6 @@ export default function ComposePage() {
               <Trash2 size={17} />
             </Link>
           </div>
-          {isProduction && (
-            <p className="compose-note">
-              This workspace is read-only in production.
-            </p>
-          )}
         </form>
       </div>
     </div>

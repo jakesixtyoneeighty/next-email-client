@@ -21,10 +21,7 @@ export function ThreadActions({ threadId }: { threadId: number }) {
     if (trashState.error) toast.error(trashState.error);
     else if (trashState.success) toast.success('Conversation moved to trash');
   }, [trashState]);
-  const disabled =
-    archivePending ||
-    trashPending ||
-    process.env.NEXT_PUBLIC_VERCEL_ENV === 'production';
+  const disabled = archivePending || trashPending;
   return (
     <div className="thread-actions">
       <form action={archiveAction}>

@@ -1,8 +1,11 @@
 import { relations } from 'drizzle-orm';
 import {
+  bigint,
+  boolean,
   index,
   integer,
-  pgTable,
+  jsonb,
+  pgSchema,
   serial,
   text,
   timestamp,
@@ -10,7 +13,9 @@ import {
   varchar,
 } from 'drizzle-orm/pg-core';
 
-export const users = pgTable(
+export const mailSchema = pgSchema('mail');
+
+export const users = mailSchema.table(
   'users',
   {
     id: serial('id').primaryKey(),
@@ -32,13 +37,116 @@ export const users = pgTable(
   },
 );
 
-export const threads = pgTable('threads', {
+export const authUser = mailSchema.table('auth_user', {
+  id: text('id').primaryKey(),
+  name: text('name').notNull(),
+  email: text('email').notNull().unique(),
+  emailVerified: boolean('email_verified').notNull().default(false),
+  image: text('image'),
+  createdAt: timestamp('created_at', { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+});
+export const session = mailSchema.table(
+  'auth_session',
+  {
+    id: text('id').primaryKey(),
+    expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+    token: text('token').notNull().unique(),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    ipAddress: text('ip_address'),
+    userAgent: text('user_agent'),
+    userId: text('user_id')
+      .notNull()
+      .references(() => authUser.id, { onDelete: 'cascade' }),
+  },
+  (t) => [index('session_user_idx').on(t.userId)],
+);
+export const account = mailSchema.table(
+  'auth_account',
+  {
+    id: text('id').primaryKey(),
+    accountId: text('account_id').notNull(),
+    providerId: text('provider_id').notNull(),
+    userId: text('user_id')
+      .notNull()
+      .references(() => authUser.id, { onDelete: 'cascade' }),
+    accessToken: text('access_token'),
+    refreshToken: text('refresh_token'),
+    idToken: text('id_token'),
+    accessTokenExpiresAt: timestamp('access_token_expires_at', {
+      withTimezone: true,
+    }),
+    refreshTokenExpiresAt: timestamp('refresh_token_expires_at', {
+      withTimezone: true,
+    }),
+    scope: text('scope'),
+    password: text('password'),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    index('account_user_idx').on(t.userId),
+    uniqueIndex('account_provider_idx').on(t.providerId, t.accountId),
+  ],
+);
+export const verification = mailSchema.table(
+  'auth_verification',
+  {
+    id: text('id').primaryKey(),
+    identifier: text('identifier').notNull(),
+    value: text('value').notNull(),
+    expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [index('verification_identifier_idx').on(t.identifier)],
+);
+export const rateLimit = mailSchema.table('auth_rate_limit', {
+  id: text('id').primaryKey(),
+  key: text('key').notNull().unique(),
+  count: integer('count').notNull(),
+  lastRequest: bigint('last_request', { mode: 'number' }).notNull(),
+});
+export const mailboxes = mailSchema.table('mailboxes', {
   id: serial('id').primaryKey(),
+  authUserId: text('auth_user_id')
+    .notNull()
+    .unique()
+    .references(() => authUser.id),
+  contactId: integer('contact_id')
+    .notNull()
+    .references(() => users.id),
+  email: text('email').notNull().unique(),
+  recoveryEmail: text('recovery_email').notNull(),
+});
+
+export const threads = mailSchema.table('threads', {
+  id: serial('id').primaryKey(),
+  mailboxId: integer('mailbox_id')
+    .notNull()
+    .references(() => mailboxes.id),
   subject: varchar('subject', { length: 255 }),
   lastActivityDate: timestamp('last_activity_date').defaultNow(),
 });
 
-export const emails = pgTable(
+export const emails = mailSchema.table(
   'emails',
   {
     id: serial('id').primaryKey(),
@@ -47,6 +155,13 @@ export const emails = pgTable(
     recipientId: integer('recipient_id').references(() => users.id),
     subject: varchar('subject', { length: 255 }),
     body: text('body'),
+    providerId: text('provider_id'),
+    recipientAddress: text('recipient_address'),
+    replyTo: text('reply_to'),
+    attachments: jsonb('attachments')
+      .$type<{ id: string; filename: string; size: number }[]>()
+      .notNull()
+      .default([]),
     sentDate: timestamp('sent_date').defaultNow(),
   },
   (table) => {
@@ -59,18 +174,48 @@ export const emails = pgTable(
   },
 );
 
-export const folders = pgTable('folders', {
+export const receipts = mailSchema.table(
+  'receipts',
+  {
+    id: serial('id').primaryKey(),
+    providerId: text('provider_id').notNull(),
+    mailboxId: integer('mailbox_id')
+      .notNull()
+      .references(() => mailboxes.id),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [uniqueIndex('receipt_mailbox_idx').on(t.providerId, t.mailboxId)],
+);
+export const outbox = mailSchema.table('outbox', {
+  id: text('id').primaryKey(),
+  mailboxId: integer('mailbox_id')
+    .notNull()
+    .references(() => mailboxes.id),
+  recipient: text('recipient').notNull(),
+  subject: text('subject').notNull(),
+  body: text('body').notNull(),
+  status: text('status').notNull().default('pending'),
+  providerId: text('provider_id'),
+  threadId: integer('thread_id').references(() => threads.id),
+  createdAt: timestamp('created_at', { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+});
+
+export const folders = mailSchema.table('folders', {
   id: serial('id').primaryKey(),
   name: varchar('name', { length: 50 }).notNull(),
 });
 
-export const userFolders = pgTable('user_folders', {
+export const userFolders = mailSchema.table('user_folders', {
   id: serial('id').primaryKey(),
   userId: integer('user_id').references(() => users.id),
   folderId: integer('folder_id').references(() => folders.id),
 });
 
-export const threadFolders = pgTable('thread_folders', {
+export const threadFolders = mailSchema.table('thread_folders', {
   id: serial('id').primaryKey(),
   threadId: integer('thread_id').references(() => threads.id),
   folderId: integer('folder_id').references(() => folders.id),

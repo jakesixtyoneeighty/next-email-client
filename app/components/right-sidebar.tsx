@@ -1,8 +1,8 @@
 import { getUserProfile } from '@/lib/db/queries';
 import { ArrowUpRight, MapPin } from 'lucide-react';
 
-export async function RightSidebar({ userId }: { userId: number }) {
-  const user = await getUserProfile(userId);
+export async function RightSidebar() {
+  const user = await getUserProfile();
   return (
     <aside className="profile-sidebar">
       <h2>Your workspace</h2>

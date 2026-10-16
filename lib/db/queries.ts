@@ -1,5 +1,5 @@
 import { and, desc, eq, ilike, or, sql } from 'drizzle-orm';
-import { cacheTag } from 'next/cache';
+import { requireMailbox } from '../session';
 import { toTitleCase } from '../utils';
 import { db } from './drizzle';
 import { emails, folders, threadFolders, threads, users } from './schema';
@@ -10,20 +10,22 @@ type Folder = {
 };
 
 export async function getFoldersWithThreadCount() {
-  'use cache';
-  cacheTag('mail');
-  if (!process.env.POSTGRES_URL)
-    return { specialFolders: [], otherFolders: [] };
+  const mailbox = await requireMailbox();
 
   let foldersWithCount = await db
     .select({
       name: folders.name,
-      thread_count: sql<number>`count(${threadFolders.threadId})`.as(
-        'thread_count',
-      ),
+      thread_count: sql<number>`count(${threads.id})`.as('thread_count'),
     })
     .from(folders)
     .leftJoin(threadFolders, eq(folders.id, threadFolders.folderId))
+    .leftJoin(
+      threads,
+      and(
+        eq(threads.id, threadFolders.threadId),
+        eq(threads.mailboxId, mailbox.id),
+      ),
+    )
     .groupBy(folders.name);
 
   let specialFoldersOrder = ['Inbox', 'Flagged', 'Sent'];
@@ -38,9 +40,7 @@ export async function getFoldersWithThreadCount() {
 }
 
 export async function getThreadsForFolder(folderName: string) {
-  'use cache';
-  cacheTag('mail');
-  if (!process.env.POSTGRES_URL) return [];
+  const mailbox = await requireMailbox();
 
   let originalFolderName =
     folderName === 'starred' ? 'Flagged' : toTitleCase(folderName);
@@ -85,7 +85,12 @@ export async function getThreadsForFolder(folderName: string) {
     .innerJoin(folders, eq(threadFolders.folderId, folders.id))
     .innerJoin(emails, eq(threads.id, emails.threadId))
     .innerJoin(users, eq(emails.senderId, users.id))
-    .where(eq(folders.name, originalFolderName))
+    .where(
+      and(
+        eq(folders.name, originalFolderName),
+        eq(threads.mailboxId, mailbox.id),
+      ),
+    )
     .groupBy(threads.id)
     .orderBy(desc(threads.lastActivityDate));
 
@@ -93,7 +98,7 @@ export async function getThreadsForFolder(folderName: string) {
 }
 
 export async function searchThreads(search: string | undefined) {
-  if (!process.env.POSTGRES_URL) return [];
+  const mailbox = await requireMailbox();
   if (!search) {
     return [];
   }
@@ -118,12 +123,15 @@ export async function searchThreads(search: string | undefined) {
     .leftJoin(threadFolders, eq(threads.id, threadFolders.threadId))
     .leftJoin(folders, eq(threadFolders.folderId, folders.id))
     .where(
-      or(
-        ilike(users.firstName, `%${search}%`),
-        ilike(users.lastName, `%${search}%`),
-        ilike(users.email, `%${search}%`),
-        ilike(threads.subject, `%${search}%`),
-        ilike(emails.body, `%${search}%`),
+      and(
+        eq(threads.mailboxId, mailbox.id),
+        or(
+          ilike(users.firstName, `%${search}%`),
+          ilike(users.lastName, `%${search}%`),
+          ilike(users.email, `%${search}%`),
+          ilike(threads.subject, `%${search}%`),
+          ilike(emails.body, `%${search}%`),
+        ),
       ),
     )
     .orderBy(desc(threads.lastActivityDate), desc(emails.sentDate));
@@ -155,9 +163,7 @@ export async function searchThreads(search: string | undefined) {
 }
 
 export async function getThreadInFolder(folderName: string, threadId: string) {
-  'use cache';
-  cacheTag('mail');
-  if (!process.env.POSTGRES_URL) return undefined;
+  const mailbox = await requireMailbox();
 
   let originalFolderName =
     folderName === 'starred' ? 'Flagged' : toTitleCase(folderName);
@@ -177,6 +183,7 @@ export async function getThreadInFolder(folderName: string, threadId: string) {
     .innerJoin(users, eq(emails.senderId, users.id))
     .where(
       and(
+        eq(threads.mailboxId, mailbox.id),
         eq(folders.name, originalFolderName),
         eq(threads.id, parseInt(threadId)),
       ),
@@ -186,9 +193,7 @@ export async function getThreadInFolder(folderName: string, threadId: string) {
 }
 
 export async function getEmailsForThread(threadId: string) {
-  'use cache';
-  cacheTag('mail');
-  if (!process.env.POSTGRES_URL) return null;
+  const mailbox = await requireMailbox();
 
   const result = await db
     .select({
@@ -196,6 +201,10 @@ export async function getEmailsForThread(threadId: string) {
       subject: threads.subject,
       emailId: emails.id,
       body: emails.body,
+      recipientAddress: emails.recipientAddress,
+      replyTo: emails.replyTo,
+      attachments: emails.attachments,
+      senderEmail: users.email,
       sentDate: emails.sentDate,
       senderId: users.id,
       senderFirstName: users.firstName,
@@ -205,7 +214,12 @@ export async function getEmailsForThread(threadId: string) {
     .from(threads)
     .innerJoin(emails, eq(threads.id, emails.threadId))
     .innerJoin(users, eq(emails.senderId, users.id))
-    .where(eq(threads.id, parseInt(threadId, 10)))
+    .where(
+      and(
+        eq(threads.id, parseInt(threadId, 10)),
+        eq(threads.mailboxId, mailbox.id),
+      ),
+    )
     .orderBy(emails.sentDate);
 
   if (result.length === 0) {
@@ -218,9 +232,13 @@ export async function getEmailsForThread(threadId: string) {
     emails: result.map((row) => ({
       id: row.emailId,
       body: row.body,
+      recipientAddress: row.recipientAddress,
+      replyTo: row.replyTo,
+      attachments: row.attachments,
       sentDate: row.sentDate,
       sender: {
         id: row.senderId,
+        email: row.senderEmail,
         firstName: row.senderFirstName,
         lastName: row.senderLastName,
       },
@@ -231,24 +249,8 @@ export async function getEmailsForThread(threadId: string) {
   return thread;
 }
 
-export async function getAllEmailAddresses() {
-  'use cache';
-  cacheTag('mail');
-  if (!process.env.POSTGRES_URL) return [];
-
-  return db
-    .select({
-      firstName: users.firstName,
-      lastName: users.lastName,
-      email: users.email,
-    })
-    .from(users);
-}
-
-export async function getUserProfile(userId: number) {
-  'use cache';
-  cacheTag('mail');
-  if (!process.env.POSTGRES_URL) return null;
+export async function getUserProfile() {
+  const mailbox = await requireMailbox();
 
   const userInfo = await db
     .select({
@@ -265,7 +267,7 @@ export async function getUserProfile(userId: number) {
       github: users.github,
     })
     .from(users)
-    .where(eq(users.id, userId))
+    .where(eq(users.id, mailbox.contactId))
     .limit(1)
     .execute();
 
@@ -279,7 +281,12 @@ export async function getUserProfile(userId: number) {
     })
     .from(threads)
     .innerJoin(emails, eq(emails.threadId, threads.id))
-    .where(eq(emails.senderId, userId))
+    .where(
+      and(
+        eq(emails.senderId, mailbox.contactId),
+        eq(threads.mailboxId, mailbox.id),
+      ),
+    )
     .orderBy(desc(threads.lastActivityDate))
     .limit(3)
     .execute();

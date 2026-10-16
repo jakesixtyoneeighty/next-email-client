@@ -7,7 +7,9 @@ dotenv.config();
 
 async function main() {
   await migrate(db, {
-    migrationsFolder: path.join(process.cwd(), '/lib/db/migrations'),
+    migrationsSchema: 'mail_migrations',
+    migrationsTable: '__mail_migrations',
+    migrationsFolder: path.join(process.cwd(), '/lib/db/mail-migrations'),
   });
   console.log(`Migrations complete`);
   await client.end();

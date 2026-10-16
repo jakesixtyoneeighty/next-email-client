@@ -1,9 +1,6 @@
 import { GeistSans } from 'geist/font/sans';
 import type { Metadata, Viewport } from 'next';
-import { Suspense } from 'react';
 import { Toaster } from 'sonner';
-import { Navigation } from './components/navigation';
-import { RightSidebar } from './components/right-sidebar';
 import './globals.css';
 
 export const metadata: Metadata = {
@@ -29,19 +26,7 @@ export default function RootLayout({
         <a className="skip-link" href="#main-content">
           Skip to mail
         </a>
-        <Suspense>
-          <Navigation />
-        </Suspense>
-        <main id="main-content" className="mail-main">
-          {children}
-        </main>
-        <Suspense
-          fallback={
-            <aside className="profile-sidebar" aria-label="Loading profile" />
-          }
-        >
-          <RightSidebar userId={1} />
-        </Suspense>
+        {children}
         <Toaster theme="dark" closeButton />
       </body>
     </html>
