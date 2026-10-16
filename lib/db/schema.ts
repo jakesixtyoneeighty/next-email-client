@@ -70,6 +70,28 @@ export const session = mailSchema.table(
   },
   (t) => [index('session_user_idx').on(t.userId)],
 );
+export const passkey = mailSchema.table(
+  'auth_passkey',
+  {
+    id: text('id').primaryKey(),
+    name: text('name'),
+    publicKey: text('public_key').notNull(),
+    userId: text('user_id')
+      .notNull()
+      .references(() => authUser.id, { onDelete: 'cascade' }),
+    credentialID: text('credential_id').notNull(),
+    counter: bigint('counter', { mode: 'number' }).notNull(),
+    deviceType: text('device_type').notNull(),
+    backedUp: boolean('backed_up').notNull(),
+    transports: text('transports'),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
+    aaguid: text('aaguid'),
+  },
+  (t) => [
+    index('passkey_user_idx').on(t.userId),
+    uniqueIndex('passkey_credential_idx').on(t.credentialID),
+  ],
+);
 export const account = mailSchema.table(
   'auth_account',
   {

@@ -9,6 +9,7 @@ import {
   Menu,
   PenLine,
   Send,
+  ShieldCheck,
   Star,
   Trash2,
   X,
@@ -96,6 +97,15 @@ export function Navigation({ email }: { email: string }) {
           })}
         </nav>
         <div className="nav-bottom">
+          <Link
+            href="/settings/security"
+            className={`folder-link ${pathname === '/settings/security' ? 'active' : ''}`}
+            aria-current={
+              pathname === '/settings/security' ? 'page' : undefined
+            }
+          >
+            <ShieldCheck size={18} /> Security
+          </Link>
           <button
             className="folder-link"
             onClick={async () => {

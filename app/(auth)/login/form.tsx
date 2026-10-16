@@ -1,12 +1,28 @@
 'use client';
 import { authClient } from '@/lib/auth-client';
-import { ArrowRight, LockKeyhole } from 'lucide-react';
+import { passkeyError, usePasskeySupport } from '@/lib/passkeys';
+import { ArrowRight, Fingerprint, LockKeyhole } from 'lucide-react';
 import { useState, type FormEvent } from 'react';
 export function LoginForm() {
+  const passkeySupported = usePasskeySupport();
   const [recovery, setRecovery] = useState(false);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
+  async function signInWithPasskey() {
+    setBusy(true);
+    setError('');
+    setMessage('');
+    try {
+      const result = await authClient.signIn.passkey();
+      if (result.error) setError(passkeyError(result.error));
+      else window.location.assign('/f/inbox');
+    } catch {
+      setError('Unable to connect. Please try again.');
+    } finally {
+      setBusy(false);
+    }
+  }
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setBusy(true);
@@ -94,9 +110,27 @@ export function LoginForm() {
           {busy ? 'One moment…' : recovery ? 'Send password link' : 'Sign in'}
           <ArrowRight size={17} />
         </button>
+        {!recovery && (
+          <>
+            <button
+              type="button"
+              className="secondary-button passkey-sign-in"
+              disabled={busy || !passkeySupported}
+              onClick={signInWithPasskey}
+            >
+              <Fingerprint size={18} /> Sign in with a passkey
+            </button>
+            <p className="passkey-hint">
+              {passkeySupported === false
+                ? 'Passkeys aren’t available in this browser. You can still sign in with your password.'
+                : 'Set up a passkey in Security settings after signing in.'}
+            </p>
+          </>
+        )}
       </form>
       <button
         className="auth-text-button"
+        disabled={busy}
         onClick={() => {
           setRecovery(!recovery);
           setError('');

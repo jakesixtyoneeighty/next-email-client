@@ -1,6 +1,6 @@
 import { eq } from 'drizzle-orm';
 import { randomUUID } from 'node:crypto';
-import { z } from 'zod';
+import { z } from 'zod/v3';
 import { client, db } from '../lib/db/drizzle';
 import { authUser, folders, mailboxes, users } from '../lib/db/schema';
 

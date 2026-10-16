@@ -2,7 +2,7 @@
 import { and, eq } from 'drizzle-orm';
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
-import { z } from 'zod';
+import { z } from 'zod/v3';
 import { sendMessage } from '../mail/send';
 import { requireMailbox } from '../session';
 import { db } from './drizzle';

@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import { z } from 'zod/v3';
 export function addressOf(value: string): string | null {
   const address = (value.match(/<([^<>]+)>\s*$/)?.[1] || value)
     .trim()

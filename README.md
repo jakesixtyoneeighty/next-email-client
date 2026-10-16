@@ -21,6 +21,16 @@ Sign in with the primary `.com` address and a password. Public registration is d
 
 ## Configuration
 
+### Passkeys
+
+After signing in with your password, open **Security** in the sidebar and choose **Add a passkey**. Give it a name so you can recognize it later, then follow your device or password manager’s prompt. Setup requires a recent sign-in; sign out and back in if prompted. On future visits, choose **Sign in with a passkey** on the login page without entering an email or password. You can review and remove saved passkeys in Security settings. Password sign-in and recovery remain available.
+
+Passkeys use [Better Auth’s passkey plugin](https://better-auth.com/docs/plugins/passkey) and require HTTPS (or localhost for development) and a browser with WebAuthn support. The relying-party ID and allowed origin come from `BETTER_AUTH_URL`; production must use `https://mail.sixtyoneeighty.dev`. Passkeys registered on localhost or a preview domain will not work on the production domain. Registration requires an existing account session; public sign-up remains disabled.
+
+Before deploying this feature, run `pnpm db:migrate` against the target database to create `mail.auth_passkey`. The migration only adds the passkey table, indexes, and user foreign key.
+
+### Environment
+
 Use Node 24 LTS and pnpm 12.4.1. Create a gitignored `.env.local` with:
 
 ```dotenv
@@ -72,7 +82,7 @@ BETTER_AUTH_URL=http://localhost:3000 \
 MAIL_INTEGRATION_TEST=1 pnpm test
 ```
 
-They verify invite-only authentication, single-use reset links, sign-out revocation, SMTP-envelope routing, receipt deduplication, and safe concurrent/retried sends. Test fixtures remain in the disposable local database.
+They verify invite-only authentication, single-use reset links, sign-out revocation, passkey enrollment authorization and account isolation, SMTP-envelope routing, receipt deduplication, and safe concurrent/retried sends. Test fixtures remain in the disposable local database. Passkey registration and sign-in also need browser verification with a real or virtual WebAuthn authenticator.
 
 To regenerate icons from the original artwork:
 

@@ -1,4 +1,5 @@
 import { drizzleAdapter } from '@better-auth/drizzle-adapter';
+import { passkey } from '@better-auth/passkey';
 import { waitUntil } from '@vercel/functions';
 import { betterAuth } from 'better-auth';
 import { eq } from 'drizzle-orm';
@@ -7,11 +8,14 @@ import {
   account,
   authUser,
   mailboxes,
+  passkey as passkeyTable,
   rateLimit,
   session,
   verification,
 } from './db/schema';
 import { getResend } from './resend';
+
+const authURL = new URL(process.env.BETTER_AUTH_URL || 'http://localhost:3000');
 
 export const auth = betterAuth({
   appName: 'sixtyoneeighty Mail',
@@ -19,13 +23,32 @@ export const auth = betterAuth({
     backgroundTasks: { handler: waitUntil },
     ipAddress: { ipAddressHeaders: ['x-forwarded-for'] },
   },
-  baseURL: process.env.BETTER_AUTH_URL || 'http://localhost:3000',
+  baseURL: authURL.origin,
   secret: process.env.BETTER_AUTH_SECRET,
   database: drizzleAdapter(db, {
     provider: 'pg',
     transaction: true,
-    schema: { user: authUser, session, account, verification, rateLimit },
+    schema: {
+      user: authUser,
+      session,
+      account,
+      verification,
+      rateLimit,
+      passkey: passkeyTable,
+    },
   }),
+  plugins: [
+    passkey({
+      rpID: authURL.hostname,
+      rpName: 'sixtyoneeighty Mail',
+      origin: authURL.origin,
+      registration: { requireSession: true },
+      authenticatorSelection: {
+        residentKey: 'required',
+        userVerification: 'preferred',
+      },
+    }),
+  ],
   emailAndPassword: {
     enabled: true,
     disableSignUp: true,
@@ -60,6 +83,10 @@ export const auth = betterAuth({
     customRules: {
       '/sign-in/email': { window: 60, max: 5 },
       '/request-password-reset': { window: 300, max: 3 },
+      '/passkey/generate-authenticate-options': { window: 60, max: 10 },
+      '/passkey/verify-authentication': { window: 60, max: 10 },
+      '/passkey/generate-register-options': { window: 60, max: 5 },
+      '/passkey/verify-registration': { window: 60, max: 5 },
     },
   },
   user: { changeEmail: { enabled: false }, deleteUser: { enabled: false } },
