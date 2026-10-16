@@ -4,6 +4,8 @@ import { Search } from 'lucide-react';
 import Form from 'next/form';
 import { Suspense } from 'react';
 
+export const instant = false;
+
 export default function SearchPage({
   searchParams,
 }: {

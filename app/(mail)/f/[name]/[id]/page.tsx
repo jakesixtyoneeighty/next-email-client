@@ -4,6 +4,8 @@ import { ArrowLeft, Paperclip, Reply } from 'lucide-react';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 
+export const instant = false;
+
 export default async function EmailPage({
   params,
 }: {

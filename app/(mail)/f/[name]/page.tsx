@@ -7,6 +7,8 @@ const folderNames = ['inbox', 'starred', 'drafts', 'sent', 'archive', 'trash'];
 export function generateStaticParams() {
   return folderNames.map((name) => ({ name }));
 }
+export const instant = false;
+
 export default function ThreadsPage({
   params,
 }: {

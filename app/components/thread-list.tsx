@@ -3,6 +3,7 @@ import { formatEmailString, highlightText } from '@/lib/utils';
 import { Inbox, Search } from 'lucide-react';
 import Form from 'next/form';
 import Link from 'next/link';
+import { RefreshMail } from './refresh-mail';
 import { ThreadActions } from './thread-actions';
 
 type User = typeof users.$inferSelect;
@@ -26,6 +27,7 @@ export function MailTopbar() {
         Workspace <span className="breadcrumb-slash">/</span>{' '}
         <strong>Mail</strong>
       </span>
+      <RefreshMail />
       <Form action="/search" className="quick-search">
         <Search size={16} />
         <input name="q" aria-label="Search mail" placeholder="Search mail" />
