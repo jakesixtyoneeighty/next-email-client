@@ -12,7 +12,7 @@ test(
     if (!process.env.POSTGRES_URL?.includes('127.0.0.1:55461'))
       throw new Error('Integration tests require the isolated local database');
     const { db, client } = await import('../lib/db/drizzle');
-    const { mailboxes, receipts, outbox, threads } =
+    const { emails, mailboxes, receipts, outbox, threads } =
       await import('../lib/db/schema');
     const { receiveEmail } = await import('../lib/mail/receive');
     const { sendMessage } = await import('../lib/mail/send');
@@ -60,6 +60,42 @@ test(
         text: 'Only Ivar can read this fixture',
         received_for: ['ivar@sixtyoneeighty.com'],
       });
+      const htmlMessageId = randomUUID();
+      await receiveEmail({
+        ...message,
+        id: htmlMessageId,
+        subject: 'HTML + inline image fixture',
+        text: null,
+        html: '<p>See <a href="https://example.com">link</a><img src="cid:logo@example" /></p>',
+        received_for: ['jake@sixtyoneeighty.com'],
+        attachments: [
+          {
+            id: 'att_inline_1',
+            filename: 'logo.png',
+            size: 1234,
+            content_type: 'image/png',
+            content_id: '<logo@example>',
+            content_disposition: 'inline',
+          },
+        ],
+      });
+      const [storedHtmlEmail] = await db
+        .select()
+        .from(emails)
+        .where(eq(emails.providerId, htmlMessageId));
+      assert.ok(storedHtmlEmail);
+      assert.match(storedHtmlEmail.body || '', /See link/);
+      assert.match(storedHtmlEmail.bodyHtml || '', /cid:logo@example/);
+      assert.deepEqual(storedHtmlEmail.attachments, [
+        {
+          id: 'att_inline_1',
+          filename: 'logo.png',
+          size: 1234,
+          contentType: 'image/png',
+          contentId: '<logo@example>',
+          contentDisposition: 'inline',
+        },
+      ]);
       let calls = 0;
       const providerIds = new Map<string, string>();
       const provider = {
