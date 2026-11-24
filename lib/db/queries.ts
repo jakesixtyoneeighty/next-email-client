@@ -2,7 +2,14 @@ import { and, desc, eq, ilike, or, sql } from 'drizzle-orm';
 import { requireMailbox } from '../session';
 import { toTitleCase } from '../utils';
 import { db } from './drizzle';
-import { emails, folders, threadFolders, threads, users } from './schema';
+import {
+  emails,
+  folders,
+  receipts,
+  threadFolders,
+  threads,
+  users,
+} from './schema';
 
 type Folder = {
   name: string;
@@ -201,6 +208,9 @@ export async function getEmailsForThread(threadId: string) {
       subject: threads.subject,
       emailId: emails.id,
       body: emails.body,
+      bodyHtml: emails.bodyHtml,
+      providerId: emails.providerId,
+      receiptId: receipts.id,
       recipientAddress: emails.recipientAddress,
       replyTo: emails.replyTo,
       attachments: emails.attachments,
@@ -214,6 +224,13 @@ export async function getEmailsForThread(threadId: string) {
     .from(threads)
     .innerJoin(emails, eq(threads.id, emails.threadId))
     .innerJoin(users, eq(emails.senderId, users.id))
+    .leftJoin(
+      receipts,
+      and(
+        eq(receipts.providerId, emails.providerId),
+        eq(receipts.mailboxId, mailbox.id),
+      ),
+    )
     .where(
       and(
         eq(threads.id, parseInt(threadId, 10)),
@@ -232,6 +249,9 @@ export async function getEmailsForThread(threadId: string) {
     emails: result.map((row) => ({
       id: row.emailId,
       body: row.body,
+      bodyHtml: row.bodyHtml,
+      providerId: row.providerId,
+      isInbound: row.receiptId !== null,
       recipientAddress: row.recipientAddress,
       replyTo: row.replyTo,
       attachments: row.attachments,
