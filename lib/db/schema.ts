@@ -168,6 +168,15 @@ export const threads = mailSchema.table('threads', {
   lastActivityDate: timestamp('last_activity_date').defaultNow(),
 });
 
+export type EmailAttachment = {
+  id: string;
+  filename: string;
+  size: number;
+  contentType?: string | null;
+  contentId?: string | null;
+  contentDisposition?: string | null;
+};
+
 export const emails = mailSchema.table(
   'emails',
   {
@@ -177,11 +186,12 @@ export const emails = mailSchema.table(
     recipientId: integer('recipient_id').references(() => users.id),
     subject: varchar('subject', { length: 255 }),
     body: text('body'),
+    bodyHtml: text('body_html'),
     providerId: text('provider_id'),
     recipientAddress: text('recipient_address'),
     replyTo: text('reply_to'),
     attachments: jsonb('attachments')
-      .$type<{ id: string; filename: string; size: number }[]>()
+      .$type<EmailAttachment[]>()
       .notNull()
       .default([]),
     sentDate: timestamp('sent_date').defaultNow(),

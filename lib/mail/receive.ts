@@ -26,12 +26,13 @@ export async function receiveEmail(message: GetReceivingEmailResponseSuccess) {
   const senderName = message.from.includes('<')
     ? message.from.split('<')[0].replace(/^"|"$/g, '').trim()
     : senderAddress;
-  const body =
-    message.text ||
-    convert(message.html || '', {
-      wordwrap: false,
-      selectors: [{ selector: 'img', format: 'skip' }],
-    });
+  const body = message.text?.trim()
+    ? message.text
+    : convert(message.html || '', {
+        wordwrap: false,
+        selectors: [{ selector: 'img', format: 'skip' }],
+      });
+  const bodyHtml = message.html ?? '';
   for (const [destination, recipientAddress] of destinations) {
     await db.transaction(async (tx) => {
       const [mailbox] = await tx
@@ -73,6 +74,7 @@ export async function receiveEmail(message: GetReceivingEmailResponseSuccess) {
         recipientId: mailbox.contactId,
         subject: (message.subject || '(No subject)').slice(0, 255),
         body,
+        bodyHtml,
         providerId: message.id,
         recipientAddress,
         replyTo: addressOf(message.reply_to?.[0] || message.from),
@@ -81,6 +83,9 @@ export async function receiveEmail(message: GetReceivingEmailResponseSuccess) {
           id: a.id,
           filename: a.filename || 'attachment',
           size: a.size,
+          contentType: a.content_type || null,
+          contentId: a.content_id || null,
+          contentDisposition: a.content_disposition || null,
         })),
       });
       await tx

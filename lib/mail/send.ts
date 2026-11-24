@@ -114,6 +114,7 @@ export async function sendMessage(
       recipientId: recipient.id,
       subject: pending.subject,
       body: pending.body,
+      bodyHtml: '',
       recipientAddress: pending.recipient,
       providerId: result.data.id,
     });

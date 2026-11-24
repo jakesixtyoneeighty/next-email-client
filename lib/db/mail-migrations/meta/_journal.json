@@ -15,6 +15,13 @@
       "when": 1792194258825,
       "tag": "0001_married_viper",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1795532515310,
+      "tag": "0002_bitter_susan_delgado",
+      "breakpoints": true
     }
   ]
 }
