@@ -219,7 +219,10 @@ export function normalizeContentId(value: string): string {
   } catch {
     // Keep raw value if percent-encoding is malformed.
   }
-  normalized = normalized.trim().replace(/^<+|>+$/g, '').trim();
+  normalized = normalized
+    .trim()
+    .replace(/^<+|>+$/g, '')
+    .trim();
   return normalized.toLowerCase();
 }
 
@@ -247,18 +250,21 @@ export function sanitizeCss(
     .replace(/\/\*[\s\S]*?\*\//g, '')
     .replace(/</g, '')
     .replace(/@import\b[^;]*(;|$)/gi, '')
-    .replace(/(^|[;{])\s*(?:behavior|-moz-binding)\s*:[^;}]*;?/gi, '$1')
-    .replace(
-      /(^|[;{])\s*[^;{}]*?:\s*[^;{}]*?\bexpression\s*\([^;{}]*;?/gi,
-      '$1',
-    )
+    .replace(/(^|[;{])\s*(?:behavior|-moz-binding)\s*:[^;}]*/gi, '$1')
+    .replace(/(^|[;{])\s*[^;{}]*?:\s*[^;{}]*?\bexpression\s*\([^;{}]*/gi, '$1')
     .replace(/\bexpression\s*\(/gi, 'blocked(')
     .replace(/\b(?:behavior|-moz-binding)\s*:/gi, 'x-blocked:')
+    .replace(/([;{])\s*;+/g, '$1')
     .replace(/position\s*:\s*fixed\b/gi, 'position: static');
 
   cleaned = cleaned.replace(
     /url\(\s*(?:"([^"]*)"|'([^']*)'|([^)]*))\s*\)/gi,
-    (_, dq: string | undefined, sq: string | undefined, uq: string | undefined) => {
+    (
+      _,
+      dq: string | undefined,
+      sq: string | undefined,
+      uq: string | undefined,
+    ) => {
       const rawUrl = (dq ?? sq ?? uq ?? '').trim();
       const resolved = resolveImageUrl(rawUrl);
       if (!resolved) return 'none';
@@ -409,13 +415,10 @@ function linkifySanitizedHtml(html: string): string {
       for (const token of tokenizeLinks(pendingText)) {
         if (token.type === 'text') {
           output.push(escapeText(token.value));
-        } else if (token.external) {
+        } else {
+          // Every link inside the sandboxed iframe needs target="_blank" to escape the sandbox cleanly.
           output.push(
             `<a href="${escapeAttr(token.href)}" target="_blank" rel="noopener noreferrer">${escapeText(token.text)}</a>`,
-          );
-        } else {
-          output.push(
-            `<a href="${escapeAttr(token.href)}">${escapeText(token.text)}</a>`,
           );
         }
       }
@@ -587,7 +590,6 @@ export function prepareEmailHtml({
       img: ['http', 'https', 'data'],
     },
     allowProtocolRelative: false,
-    allowedEmptyAttributes: ['alt', 'open', 'reversed', 'nowrap'],
     transformTags: {
       '*': (tagName, attribs) => {
         const next = { ...attribs };
