@@ -52,7 +52,7 @@ pnpm dev
 
 Provisioning is idempotent, does not create passwords or send emails, and refuses to silently change existing recovery addresses. `db:seed` is disabled to prevent demo messages from entering live mailboxes.
 
-All application tables live in the dedicated `mail` schema. Migrations live in `lib/db/mail-migrations`, tracked separately in `mail_migrations.__mail_migrations`. The legacy template migration folder is retained for reference and is not applied. Existing tables and migration histories in other schemas are untouched. CLI scripts load `.env.local` before `.env`, while explicit process environment variables take precedence. Run migrations before deploying a schema change.
+All application tables live in the dedicated `mail` schema. Migrations live in `lib/db/mail-migrations`, tracked separately in `mail_migrations.__mail_migrations`. The legacy template migration folder is retained for reference and is not applied. Existing tables and migration histories in other schemas are untouched. CLI scripts load `.env.local` before `.env`, while explicit process environment variables take precedence. Run `pnpm db:migrate` before deploying a schema change (such as adding `mail.emails.body_html`).
 
 ## Receiving and sending
 
@@ -62,7 +62,7 @@ The webhook verifies signatures and timestamps before fetching the full message.
 
 Outgoing mail uses the authenticated mailbox's primary address. A durable outbox preserves the provider idempotency key across timeouts; retry the same unchanged draft to avoid duplicates. Unconfirmed requests older than 23 hours require operator review in Resend because its idempotency keys expire after 24 hours. `accepted` means Resend accepted the message; it is not a claim of final recipient delivery. The application limits each mailbox to 100 new outgoing messages per hour.
 
-Mail bodies display as safe plain text; HTML-only email is converted without loading tracking pixels. Inbound attachments are downloaded through an ownership-checked endpoint using temporary Resend URLs. Attachment availability depends on Resend retention; attachments are not independently archived. Compose currently sends one recipient and plain text, with no attachment upload, CC/BCC, draft autosave, or conversation merging. Replies open a preaddressed compose view and appear as separate conversations. The inbox refresh button checks for newly received messages.
+HTML messages render inside a sanitized, script-disabled sandboxed iframe (`no-referrer`) with clickable links and inline (`cid:`) and remote images; plain-text messages auto-link URLs and email addresses and render inline previews for image attachments. Legacy inbound emails without stored HTML lazily hydrate from Resend on first view. Non-image inbound attachments are downloaded through an ownership-checked endpoint using temporary Resend URLs. Attachment availability depends on Resend retention; attachments are not independently archived. Compose currently sends one recipient and plain text, with no attachment upload, CC/BCC, draft autosave, or conversation merging. Replies open a preaddressed compose view and appear as separate conversations. The inbox refresh button checks for newly received messages.
 
 ## Checks
 
