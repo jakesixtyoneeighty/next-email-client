@@ -10,12 +10,23 @@ export type LinkToken =
 
 const CONTROL_CHARS_RE = /[\u0000-\u001F\u007F]/g;
 const ALLOWED_LINK_PROTOCOLS = new Set(['http:', 'https:', 'mailto:', 'tel:']);
-const EXTERNAL_PROTOCOLS = new Set(['http:', 'https:', 'mailto:']);
+const EXTERNAL_PROTOCOLS = new Set(['http:', 'https:']);
 
 const LINK_TOKEN_RE =
   /(https?:\/\/[^\s<>"{}|\\^\[\]`]+)|(mailto:[^\s<>"{}|\\^\[\]`]+)|((?<![\w@/.])www\.[^\s<>"{}|\\^\[\]`]+)|((?<![\w.+\-/])[\w.+-]+@(?:[a-z0-9-]+\.)+[a-z]{2,}\b)/gi;
 
 const TRAILING_PUNCTUATION_RE = /[.,;:!?'"\}>\]\)]$/;
+
+export function sanitizeHttpsUrl(raw: string): string | null {
+  try {
+    const parsed = new URL(raw);
+    return parsed.protocol === 'https:' && parsed.hostname
+      ? parsed.toString()
+      : null;
+  } catch {
+    return null;
+  }
+}
 
 /**
  * Validates and normalizes an anchor href or plain-text URL candidate.
